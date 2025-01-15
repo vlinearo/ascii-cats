@@ -5,10 +5,10 @@
 )]
 
 use tokio::*;
-use reqwest::get;
+use reqwest::{get, Client};
 use serde::Deserialize;
-use color_eyre::{self, eyre::Ok};
-
+use color_eyre::{self, eyre::Ok, owo_colors::OwoColorize};
+use pretty_hex::PrettyHex;
 
 #[derive(Deserialize)]
 struct CatImage {
@@ -22,6 +22,8 @@ struct CatImage {
 async fn main() {
     let url = get_asciicat_url().await.unwrap();
     println!("URL: {}", url);
+    let image_bytes = get_asciicats_bytes().await.unwrap();
+    println!("{}", &image_bytes[..200].hex_dump());
 }
 
 
@@ -40,4 +42,21 @@ async fn get_asciicat_url() -> color_eyre::Result<String> {
         )
     };
     Ok(image.url.clone())
+}
+
+async fn get_asciicats_bytes() -> color_eyre::Result<Vec<u8>> {
+    let client = Client::default();
+    let image = client
+        .get("https://api.thecatapi.com/v1/images/search")
+        .send()
+        .await?.error_for_status()?
+        .json::<Vec<CatImage>>()
+        .await?
+        .pop()
+        .ok_or_else(|| color_eyre::eyre::eyre!("Error while getting cat image: "))?;
+
+    Ok(client
+        .get(image.url)
+        .send()
+        .await?.error_for_status()?.bytes().await?.to_vec())
 }
